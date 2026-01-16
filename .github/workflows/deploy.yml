@@ -53,6 +53,7 @@ jobs:
           sam deploy \
             --stack-name "${{ inputs.stack_name }}" \
             --region "${{ inputs.aws_region }}" \
+            --resolve-s3 \
             --capabilities CAPABILITY_IAM \
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
