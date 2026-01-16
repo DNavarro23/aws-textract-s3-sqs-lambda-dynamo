@@ -42,7 +42,7 @@ Resources:
               StringEquals:
                 aws:SourceAccount: !Ref AWS::AccountId
               ArnLike:
-                aws:SourceArn: !GetAtt IngestBucket.Arn
+                aws:SourceArn: !Sub "arn:aws:s3:::textract-ingest-${AWS::110370204334}-${AWS::us-east-1}"
 
   IngestBucket:
     Type: AWS::S3::Bucket
