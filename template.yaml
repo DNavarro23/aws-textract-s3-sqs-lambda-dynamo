@@ -40,14 +40,7 @@ Resources:
             Resource: !GetAtt MainQueue.Arn
             Condition:
               StringEquals:
-                aws:SourceArn: !Join ["", ["arn:aws:s3:::textract-ingest-", !Ref "AWS::AccountId", "-", !Ref "AWS::Region"]]
-              ArnLike:
-                aws:SourceArn: !Join
-                  -""
-                  - -"arn:aws:s3:::textract-ingest-" 
-                    - !Ref "AWS::AccountId"
-                    - "-"
-                    - !Ref "AWS::Region"
+                aws:SourceAccount: !Ref AWS::AccountId
 
   IngestBucket:
     Type: AWS::S3::Bucket
