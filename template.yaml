@@ -1,1 +1,122 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: Pipeline S3 -> SQS -> Lambda -> Textract -> DynamoDB + S3 (output)
+
+Globals:
+  Function:
+    Runtime: python3.11
+    Timeout: 60
+    MemorySize: 512
+    Tracing: Active
+
+Resources:
+  DeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "textract-dlq-${AWS::StackName}"
+
+  MainQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      QueueName: !Sub "textract-queue-${AWS::StackName}"
+      VisibilityTimeout: 120
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt DeadLetterQueue.Arn
+        maxReceiveCount: 3
+
+  MainQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref MainQueue
+      PolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Sid: AllowS3ToSendMessage
+            Effect: Allow
+            Principal:
+              Service: s3.amazonaws.com
+            Action: sqs:SendMessage
+            Resource: !GetAtt MainQueue.Arn
+            Condition:
+              StringEquals:
+                aws:SourceAccount: !Ref AWS::AccountId
+              ArnLike:
+                aws:SourceArn: !GetAtt IngestBucket.Arn
+
+  IngestBucket:
+    Type: AWS::S3::Bucket
+    DependsOn: MainQueuePolicy
+    Properties:
+      BucketName: !Sub "textract-ingest-${AWS::AccountId}-${AWS::Region}"
+      NotificationConfiguration:
+        QueueConfigurations:
+          - Event: "s3:ObjectCreated:*"
+            Queue: !GetAtt MainQueue.Arn
+            Filter:
+              S3Key:
+                Rules:
+                  - Name: prefix
+                    Value: incoming/
+
+  OutputBucket:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: !Sub "textract-output-${AWS::AccountId}-${AWS::Region}"
+
+  ResultsTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      TableName: !Sub "TextractResults-${AWS::StackName}"
+      BillingMode: PAY_PER_REQUEST
+      AttributeDefinitions:
+        - AttributeName: DocumentId
+          AttributeType: S
+      KeySchema:
+        - AttributeName: DocumentId
+          KeyType: HASH
+
+  ProcessorFunction:
+    Type: AWS::Serverless::Function
+    Properties:
+      FunctionName: !Sub "textract-processor-${AWS::StackName}"
+      Handler: app.lambda_handler
+      CodeUri: src/processor/
+      Environment:
+        Variables:
+          DDB_TABLE: !Ref ResultsTable
+          OUTPUT_BUCKET: !Ref OutputBucket
+          OUTPUT_PREFIX: "processed/"
+      Policies:
+        - S3ReadPolicy:
+            BucketName: !Ref IngestBucket
+        - S3WritePolicy:
+            BucketName: !Ref OutputBucket
+        - DynamoDBCrudPolicy:
+            TableName: !Ref ResultsTable
+        - Statement:
+            - Effect: Allow
+              Action:
+                - textract:AnalyzeDocument
+                - textract:DetectDocumentText
+              Resource: "*"
+      Events:
+        SQSTrigger:
+          Type: SQS
+          Properties:
+            Queue: !GetAtt MainQueue.Arn
+            BatchSize: 1
+            Enabled: true
+
+Outputs:
+  IngestBucketName:
+    Value: !Ref IngestBucket
+  OutputBucketName:
+    Value: !Ref OutputBucket
+  QueueUrl:
+    Value: !Ref MainQueue
+  DynamoTableName:
+    Value: !Ref ResultsTable
+  ProcessorFunctionName:
+    Value: !Ref ProcessorFunction
 
