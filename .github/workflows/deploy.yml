@@ -46,11 +46,30 @@ jobs:
         run: pip install aws-sam-cli
 
       - name: Build
-        run: sam build
+        run: sam build --template-file template.yaml
+
+      - name: Debug template in repo and build
+        run: |
+          echo "=== GIT HEAD ==="
+          git rev-parse HEAD
+
+          echo "=== Templates present ==="
+          find . -maxdepth 3 -type f \( -name "template.yaml" -o -name "template.yml" \) -print
+
+          echo "=== Search Join in repo template.yaml ==="
+          grep -n "Fn::Join\|!Join" template.yaml || echo "No Join in template.yaml"
+
+          echo "=== Search Join in built template ==="
+          grep -n "Fn::Join\|!Join" .aws-sam/build/template.yaml || echo "No Join in .aws-sam/build/template.yaml"
+
+          echo "=== Validate built template ==="
+          sam validate --template-file .aws-sam/build/template.yaml
+
 
       - name: Deploy
         run: |
           sam deploy \
+            --template-file .aws-sam/build/template.yaml \
             --stack-name "${{ inputs.stack_name }}" \
             --region "${{ inputs.aws_region }}" \
             --resolve-s3 \
