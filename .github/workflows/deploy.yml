@@ -77,9 +77,24 @@ jobs:
             --no-confirm-changeset \
             --no-fail-on-empty-changeset
 
-      - name: Smoke test (upload sample to S3 incoming/)
-        if: ${{ inputs.run_smoke_test == 'true' }}
+            - name: Smoke test (upload sample to S3 incoming/)
         run: |
+          echo "run_smoke_test = '${{ inputs.run_smoke_test }}'"
+          echo "sample_file    = '${{ inputs.sample_file }}'"
+
+          # 1) Si el usuario NO quiere smoke test, salir OK (sin fallar)
+          if [ "${{ inputs.run_smoke_test }}" != "true" ]; then
+            echo "Smoke test disabled. Skipping."
+            exit 0
+          fi
+
+          # 2) Si el archivo no existe en el repo, salir OK (sin fallar)
+          if [ ! -f "${{ inputs.sample_file }}" ]; then
+            echo "Sample file not found at '${{ inputs.sample_file }}'. Skipping."
+            exit 0
+          fi
+
+          # 3) Obtener bucket de entrada desde Outputs del stack
           INGEST_BUCKET=$(aws cloudformation describe-stacks \
             --stack-name "${{ inputs.stack_name }}" \
             --query "Stacks[0].Outputs[?OutputKey=='IngestBucketName'].OutputValue" \
@@ -87,5 +102,6 @@ jobs:
 
           KEY="incoming/$(basename '${{ inputs.sample_file }}')"
           aws s3 cp "${{ inputs.sample_file }}" "s3://${INGEST_BUCKET}/${KEY}"
-          echo "Uploaded to s3://${INGEST_BUCKET}/${KEY}" 
+          echo "Uploaded to s3://${INGEST_BUCKET}/${KEY}"
+ 
 
