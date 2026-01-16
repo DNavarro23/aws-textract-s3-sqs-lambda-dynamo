@@ -45,7 +45,7 @@ Resources:
                 aws:SourceArn: !Join
                   -""
                   - -"arn:aws:s3:::textract-ingest-" 
-                    -!Ref "AWS::AccountId"
+                    - !Ref "AWS::AccountId"
                     - "-"
                     - !Ref "AWS::Region"
 
